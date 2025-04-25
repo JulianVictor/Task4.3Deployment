@@ -1,4 +1,3 @@
-version: '3'
 services:
   web:
     build: .
@@ -6,7 +5,15 @@ services:
       - "80:80"
     environment:
       - NAME=AzureDocker
+      - POSTGRES_PASSWORD=mysecretpassword
     depends_on:
-      - redis
-  redis:
-    image: redis:alpine
+      - db
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_PASSWORD: mysecretpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

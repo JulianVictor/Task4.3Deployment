@@ -1,22 +1,37 @@
 from flask import Flask
-from redis import Redis, RedisError
+import psycopg2
 import os
 import socket
 
-redis = Redis(host="redis", db=0, socket_connect_timeout=2, socket_timeout=2)
 app = Flask(__name__)
+
+# PostgreSQL connection
+def get_db_connection():
+    conn = psycopg2.connect(
+        host="db",
+        database="postgres",
+        user="postgres",
+        password=os.getenv("POSTGRES_PASSWORD")
+    )
+    return conn
 
 @app.route("/")
 def hello():
-    try:
-        visits = redis.incr("counter")
-    except RedisError:
-        visits = "<i>cannot connect to Redis, counter disabled</i>"
-
-    html = "<h3>Hello {name}!</h3>" \
-           "<b>Hostname:</b> {hostname}<br/>" \
-           "<b>Visits:</b> {visits}"
-    return html.format(name=os.getenv("NAME", "world"), hostname=socket.gethostname(), visits=visits)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS visits (id SERIAL PRIMARY KEY, count INTEGER);")
+    cur.execute("INSERT INTO visits (count) VALUES (1) ON CONFLICT DO NOTHING;")
+    cur.execute("UPDATE visits SET count = count + 1 WHERE id = 1;")
+    cur.execute("SELECT count FROM visits WHERE id = 1;")
+    visits = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    
+    return f"""
+    <h3>Hello {os.getenv('NAME', 'world')}!</h3>
+    <b>Hostname:</b> {socket.gethostname()}<br/>
+    <b>Visits:</b> {visits}
+    """
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=80)
+    app.run(host="0.0.0.0")
